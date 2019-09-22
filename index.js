@@ -1,35 +1,38 @@
-const request = require('request-promise');
+const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 
-const URL = 'https://www.imdb.com/title/tt0102926/?ref_=nv_sr_1';
+async function scrapeListings(page) {
+    await page.goto(
+      'https://sfbay.craigslist.org/d/software-qa-dba-etc/search/sof'
+    );
+    const html = await page.content();
+    const $ = cheerio.load(html);
+    const listings = $('.result-info').map((index, element) => {
+        const titleElement = $(element).find('.result-title');
+        const timeElement = $(element).find('.result-date');
+        const hoodElement = $(element).find('.result-hood');
+        const hood = $(hoodElement).text().trim().replace("(","").replace(")","");
+        const title = $(titleElement).text();
+        const url = $(titleElement).attr('href');
+        const datePosted = new Date($(timeElement).attr('datetime'));
+        return { title, datePosted, url, hood };
+    }).get();
+    return listings;
+}
 
-(async () => {
+async function scrapeJobDescriptions(listings, page){
+    for(let i = 0; i < listings.length; i++){
+        await page.goto(listings[i].url);
+        const html = await page.content();
+    }
+}
 
-    const response = await request({
-        uri: URL,
-        headers: {
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3',
-            'accept-encoding': 'gzip, deflate, br',
-            'accept-language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7,uk;q=0.6,de;q=0.5,la;q=0.4',
-            'cache-control': 'no-cache',
-            'pragma': 'no-cache',
-            'upgrade-insecure-requests': '1',
-            'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36'
+async function main() {
+    const browser = await puppeteer.launch({ headless: false });
+    const page = await browser.newPage();
+    const listings = await scrapeListings(page);
+    const listingsWithJobDescriptions = await scrapeJobDescriptions(listings, page);
+    console.log(listings);
+}
 
-        },
-        gzip: true
-    });
-
-    let $ = cheerio.load(response);
-
-    let title = $('div[class="title_wrapper"] > h1').text();
-    let rating = $('span[itemprop="ratingValue"]').text();
-    let poster = $('.poster > a > img').attr('src');
-    let totalRatings = $('.imdbRating > a > span[class="small"]').text();
-    let releaseDate = $('a[title="See more release dates"]').text().trim();
-
-    console.log(title, rating);
-    console.log(poster);
-    console.log(totalRatings);
-    console.log(releaseDate);
-})();
+main();
